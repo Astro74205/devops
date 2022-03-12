@@ -1,0 +1,48 @@
+from __future__ import print_function
+import json
+import os
+import boto3
+import decimal
+from boto3.dynamodb.conditions import Key, Attr
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            if o % 1 > 0:
+                return float(o)
+            else:
+                return int(o)
+        return super(DecimalEncoder, self).default(o)
+
+s3 = boto3.client('s3')
+ddb = boto3.resource('dynamodb')
+table = ddb.Table('YOUR_DYNAMODB_NAME')
+
+def lambda_handler(event,context):
+    response = table.scan(
+        Select="ALL_ATTRIBUTES",
+    )
+    
+   body = '[\n' #need to add the initial '['' to the JSON
+   count = len(response) # this is how many items in the array 
+    
+    #print ('[')
+    for i in response['Items']:
+        count = count  - 1 # decrease count by one for each pass through array
+        
+        #print(json.dumps(i, indent=2, sort_keys=True, separators=(',', ': '), cls=DecimalEncoder))
+        #if count > 0:
+        #    print(',')
+        #else: 
+        #    print(']')
+            
+        body += (json.dumps(i, indent=2, sort_keys=True, separators=(',', ': '), cls=DecimalEncoder))
+        if count > 0:
+            body +=(',\n')
+        else: 
+            body +=('\n]')
+    
+    response = s3.put_object(Bucket='YOUR_S3_BUCKET',
+    Key='YOUR_FILENAME.json',
+    Body=body,
+    ContentType='application/json')
